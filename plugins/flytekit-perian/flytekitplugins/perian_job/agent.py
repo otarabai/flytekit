@@ -31,7 +31,8 @@ from flytekit.loggers import logger
 from flytekit.models.literals import LiteralMap
 from flytekit.models.task import TaskTemplate
 
-PERIAN_API_URL = "https://api.perian.cloud"
+# PERIAN_API_URL = "https://api.perian.cloud"
+PERIAN_API_URL = "http://localhost:8000"
 
 
 @dataclass
