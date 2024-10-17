@@ -1,6 +1,7 @@
 import base64
 import shlex
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional
 
 from flyteidl.core.execution_pb2 import TaskExecution
@@ -57,6 +58,7 @@ class PerianAgent(AsyncAgentBase):
         output_prefix: Optional[str],
         **kwargs,
     ) -> PerianMetadata:
+        print(f"{datetime.now()}: PerianAgent.create")
         logger.info("Creating new Perian job")
 
         config = Configuration(host=PERIAN_API_URL)

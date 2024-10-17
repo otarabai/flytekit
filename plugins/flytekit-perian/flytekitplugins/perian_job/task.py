@@ -1,11 +1,14 @@
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Union
+from datetime import datetime
+from typing import Any, Callable, Dict, Optional, OrderedDict, Type, Union
 
 from google.protobuf import json_format
 from google.protobuf.struct_pb2 import Struct
 
 from flytekit import FlyteContextManager, PythonFunctionTask, logger
 from flytekit.configuration import SerializationSettings
+from flytekit.core.interface import Interface
+from flytekit.core.python_auto_container import PythonAutoContainerTask
 from flytekit.exceptions.user import FlyteUserException
 from flytekit.extend import TaskPlugins
 from flytekit.extend.backend.base_agent import AsyncAgentExecutorMixin
@@ -31,6 +34,28 @@ class PerianConfig:
     provider: Optional[str] = None
 
 
+class PerianContainerTask(PythonAutoContainerTask[PerianConfig]):
+    def __init__(
+        self,
+        name: str,
+        task_config: PerianConfig,
+        inputs: Optional[OrderedDict[str, Type]] = None,
+        outputs: Optional[Dict[str, Type]] = None,
+        **kwargs,
+    ):
+        super().__init__(
+            name=name,
+            task_config=task_config,
+            interface=Interface(inputs, outputs),
+            **kwargs,
+        )
+        cmd = [
+            "echo",
+            "hello perian"
+        ]
+        self.set_command_fn(lambda s: cmd)
+
+
 class PerianTask(AsyncAgentExecutorMixin, PythonFunctionTask):
     """A special task type for running tasks on PERIAN Job Platform (perian.io)"""
 
@@ -43,6 +68,7 @@ class PerianTask(AsyncAgentExecutorMixin, PythonFunctionTask):
         container_image: Optional[Union[str, ImageSpec]] = None,
         **kwargs,
     ):
+        print(f"{datetime.now()}: PerianTask.__init__")
         super().__init__(
             task_config=task_config,
             task_function=task_function,
@@ -52,7 +78,9 @@ class PerianTask(AsyncAgentExecutorMixin, PythonFunctionTask):
         )
 
     def execute(self, **kwargs) -> Any:
+        print(f"{datetime.now()}: PerianTask.execute")
         if isinstance(self.task_config, PerianConfig):
+            print(f"{datetime.now()}: PerianTask.execute: PerianConfig")
             # Use the Perian agent to run it by default.
             try:
                 ctx = FlyteContextManager.current_context()
@@ -62,6 +90,7 @@ class PerianTask(AsyncAgentExecutorMixin, PythonFunctionTask):
                         " please set --raw-output-data-prefix to a remote path. e.g. s3://, gcs//, etc."
                     )
                 if ctx.execution_state and ctx.execution_state.is_local_execution():
+                    print(f"{datetime.now()}: PerianTask.execute: local-execution")
                     return AsyncAgentExecutorMixin.execute(self, **kwargs)
             except Exception as e:
                 logger.error("Agent failed to run the task with error: %s", e)
@@ -72,6 +101,7 @@ class PerianTask(AsyncAgentExecutorMixin, PythonFunctionTask):
         """
         Return plugin-specific data as a serializable dictionary.
         """
+        print(f"{datetime.now()}: PerianTask.get_custom")
         config = {
             "cores": self.task_config.cores,
             "memory": self.task_config.memory,
