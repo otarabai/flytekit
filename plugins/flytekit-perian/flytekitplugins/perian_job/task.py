@@ -1,11 +1,13 @@
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, OrderedDict, Type, Union
 
 from google.protobuf import json_format
 from google.protobuf.struct_pb2 import Struct
 
 from flytekit import FlyteContextManager, PythonFunctionTask, logger
 from flytekit.configuration import SerializationSettings
+from flytekit.core.base_task import PythonTask
+from flytekit.core.interface import Interface
 from flytekit.exceptions.user import FlyteUserException
 from flytekit.extend import TaskPlugins
 from flytekit.extend.backend.base_agent import AsyncAgentExecutorMixin
@@ -32,7 +34,7 @@ class PerianConfig:
 
 
 class PerianTask(AsyncAgentExecutorMixin, PythonFunctionTask):
-    """A special task type for running tasks on PERIAN Job Platform (perian.io)"""
+    """A special task type for running Python function tasks on PERIAN Job Platform (perian.io)"""
 
     _TASK_TYPE = "perian_task"
 
@@ -72,18 +74,65 @@ class PerianTask(AsyncAgentExecutorMixin, PythonFunctionTask):
         """
         Return plugin-specific data as a serializable dictionary.
         """
-        config = {
-            "cores": self.task_config.cores,
-            "memory": self.task_config.memory,
-            "accelerators": self.task_config.accelerators,
-            "accelerator_type": self.task_config.accelerator_type,
-            "country_code": _validate_and_format_country_code(self.task_config.country_code),
-            "provider": self.task_config.provider,
-        }
-        config = {k: v for k, v in config.items() if v is not None}
+        config = _get_custom_task_config(self.task_config)
+        if self.environment:
+            config["environment"] = self.environment
         s = Struct()
         s.update(config)
         return json_format.MessageToDict(s)
+
+
+class PerianContainerTask(AsyncAgentExecutorMixin, PythonTask[PerianConfig]):
+    """A special task type for running Python container (not function) tasks on PERIAN Job Platform (perian.io)"""
+
+    _TASK_TYPE = "perian_task"
+
+    def __init__(
+        self,
+        name: str,
+        task_config: PerianConfig,
+        image: str,
+        command: List[str],
+        inputs: Optional[OrderedDict[str, Type]] = None,
+        **kwargs,
+    ):
+        if 'outputs' in kwargs or 'output_data_dir' in kwargs:
+            raise ValueError("PerianContainerTask does not support 'outputs' or 'output_data_dir' arguments")
+        super().__init__(
+            name=name,
+            task_type=self._TASK_TYPE,
+            task_config=task_config,
+            interface=Interface(inputs=inputs or {}),
+            **kwargs,
+        )
+        self._image = image
+        self._command = command
+
+    def get_custom(self, settings: SerializationSettings) -> Dict[str, Any]:
+        """
+        Return plugin-specific data as a serializable dictionary.
+        """
+        config = _get_custom_task_config(self.task_config)
+        config["image"] = self._image
+        config["command"] = self._command
+        if self.environment:
+            config["environment"] = self.environment
+        s = Struct()
+        s.update(config)
+        return json_format.MessageToDict(s)
+
+
+def _get_custom_task_config(task_config: PerianConfig) -> Dict[str, Any]:
+    config = {
+        "cores": task_config.cores,
+        "memory": task_config.memory,
+        "accelerators": task_config.accelerators,
+        "accelerator_type": task_config.accelerator_type,
+        "country_code": _validate_and_format_country_code(task_config.country_code),
+        "provider": task_config.provider,
+    }
+    config = {k: v for k, v in config.items() if v is not None}
+    return config
 
 
 def _validate_and_format_country_code(country_code: Optional[str]) -> Optional[str]:
