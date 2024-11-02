@@ -70,6 +70,7 @@ class PerianAgent(AsyncAgentBase):
             api_instance = JobApi(api_client)
             response = api_instance.create_job(
                 create_job_request=job_request,
+                _request_timeout=30,
                 _headers=self._build_headers(),
             )
         if response.status_code != 200:
